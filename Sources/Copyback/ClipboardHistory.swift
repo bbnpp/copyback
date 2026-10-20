@@ -52,7 +52,7 @@ final class ClipboardHistory: ObservableObject {
     }
 
     private func add(_ snapshot: PasteboardSnapshot, appName: String?, appBundleID: String?) {
-        let item = ClipItem(id: UUID(), kind: snapshot.kind, date: Date(), text: snapshot.text,
+        var item = ClipItem(id: UUID(), kind: snapshot.kind, date: Date(), text: snapshot.text,
                             contentHash: snapshot.contentHash, appName: appName, appBundleID: appBundleID)
         do {
             try storage.saveBlob(snapshot.items, for: item.id)
@@ -64,18 +64,26 @@ final class ClipboardHistory: ObservableObject {
             storage.saveThumbnail(thumbnail, for: item.id)
         }
 
-        // 같은 내용을 다시 복사하면 기존 항목을 지우고 맨 위에 새로 올린다
+        // 같은 내용을 다시 복사하면 기존 항목을 지우고 맨 위에 새로 올린다 (고정 상태는 이어받음)
         var updated = items
         for duplicate in updated where duplicate.contentHash == item.contentHash {
+            item.pinnedAt = item.pinnedAt ?? duplicate.pinnedAt
             storage.deleteFiles(for: duplicate.id)
         }
         updated.removeAll { $0.contentHash == item.contentHash }
         updated.insert(item, at: 0)
-        while updated.count > maxItems {
-            storage.deleteFiles(for: updated.removeLast().id)
-        }
+        evictOverflow(&updated)
         items = updated
         storage.saveIndex(items)
+    }
+
+    /// 고정하지 않은 항목이 maxItems를 넘으면 오래된 것부터 지운다
+    private func evictOverflow(_ list: inout [ClipItem]) {
+        var unpinnedCount = list.filter { !$0.isPinned }.count
+        while unpinnedCount > maxItems, let index = list.lastIndex(where: { !$0.isPinned }) {
+            storage.deleteFiles(for: list.remove(at: index).id)
+            unpinnedCount -= 1
+        }
     }
 
     /// 기록된 항목을 클립보드에 다시 복사하고 목록 맨 위로 올린다.
@@ -103,8 +111,24 @@ final class ClipboardHistory: ObservableObject {
         storage.saveIndex(items)
     }
 
-    func removeAll() {
-        storage.deleteAll()
-        items = []
+    /// 고정을 풀면 최근 기록 맨 위로 보낸다 (오래된 항목이 바로 밀려나 지워지지 않도록)
+    func setPinned(_ pinned: Bool, for item: ClipItem) {
+        guard let index = items.firstIndex(where: { $0.id == item.id }),
+              items[index].isPinned != pinned else { return }
+        var updated = items
+        var changed = updated.remove(at: index)
+        changed.pinnedAt = pinned ? Date() : nil
+        if !pinned { changed.date = Date() }
+        updated.insert(changed, at: pinned ? index : 0)
+        items = updated
+        storage.saveIndex(items)
+    }
+
+    /// 고정하지 않은 기록을 모두 지운다. 목록에 없는 파일, 깨진 목록 백업까지 함께 지운다.
+    func removeUnpinned() {
+        let pinned = items.filter(\.isPinned)
+        storage.deleteAll(keeping: Set(pinned.map(\.id)))
+        items = pinned
+        storage.saveIndex(items)
     }
 }

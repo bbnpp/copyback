@@ -15,6 +15,10 @@ struct ClipItem: Codable, Identifiable, Equatable {
     var contentHash: String
     var appName: String?
     var appBundleID: String?
+    /// 고정한 시각 (nil이면 고정 안 됨). 고정 항목은 개수 제한과 "모두 지우기"에서 빠진다.
+    var pinnedAt: Date? = nil
+
+    var isPinned: Bool { pinnedAt != nil }
 }
 
 /// NSPasteboardItem 하나에 담긴 타입 하나와 그 데이터. 배열 순서 = 원본 타입 순서.

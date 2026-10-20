@@ -145,7 +145,7 @@ MainActor.assumeIsolated {
 
         history.remove(history.items[0])
         expect(history.items.map(\.text) == ["three", "two"], "항목 삭제")
-        history.removeAll()
+        history.removeUnpinned()
         expect(history.items.isEmpty && fileCount(in: directory, "blobs") == 0, "모두 지우기")
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: directory)
@@ -170,10 +170,56 @@ MainActor.assumeIsolated {
         expect(recovered.items.isEmpty && backups.count == 1, "깨진 목록은 백업 후 빈 목록으로 시작")
         expect(FileManager.default.fileExists(atPath: stray.path), "목록이 깨졌을 땐 데이터 파일을 지우지 않음")
 
-        recovered.removeAll()
+        recovered.removeUnpinned()
         let remaining = (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?
             .filter { $0.hasPrefix("history.corrupt-") } ?? ["?"]
         expect(fileCount(in: directory, "blobs") == 0 && remaining.isEmpty, "모두 지우기는 남은 파일·백업까지 삭제")
+        pasteboard.releaseGlobally()
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    print("고정(pin)")
+    do {
+        let pasteboard = makePasteboard()
+        let directory = makeTempDirectory()
+        let history = ClipboardHistory(pasteboard: pasteboard, storage: HistoryStorage(directory: directory), maxItems: 2)
+        @MainActor func copyText(_ text: String) {
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            history.checkPasteboard()
+        }
+        @MainActor func item(_ text: String) -> ClipItem {
+            history.items.first { $0.text == text }!
+        }
+
+        copyText("keep")
+        copyText("a")
+        history.setPinned(true, for: item("keep"))
+        copyText("b")
+        copyText("c")
+        expect(history.items.map(\.text) == ["c", "b", "keep"], "고정 항목은 개수 제한으로 밀려나지 않음")
+        copyText("keep")
+        expect(history.items.first?.text == "keep" && item("keep").isPinned, "같은 내용을 다시 복사해도 고정 유지")
+
+        let model = PanelModel(history: history)
+        expect(model.visibleItems.map(\.text) == ["keep", "c", "b"], "고정 항목이 목록 맨 위")
+        model.togglePin(item("b"))
+        expect(model.visibleItems.map(\.text) == ["keep", "b", "c"], "고정한 순서대로 위에 표시")
+        model.copy(at: 0)
+        expect(pasteboard.string(forType: .string) == "keep", "⌘1은 첫 번째 고정 항목")
+
+        let reloaded = ClipboardHistory(pasteboard: pasteboard, storage: HistoryStorage(directory: directory))
+        expect(reloaded.items.filter(\.isPinned).map(\.text).sorted() == ["b", "keep"], "재실행 후에도 고정 유지")
+
+        history.setPinned(false, for: item("keep"))
+        expect(history.items.first?.text == "keep" && !item("keep").isPinned, "고정 해제하면 최근 기록 맨 위로")
+
+        history.removeUnpinned()
+        expect(history.items.map(\.text) == ["b"] && fileCount(in: directory, "blobs") == 1, "모두 지우기는 고정 항목만 남김")
+
+        let legacy = #"[{"id":"\#(UUID().uuidString)","kind":"text","date":0,"text":"old","contentHash":"h"}]"#
+        let decoded = try? JSONDecoder().decode([ClipItem].self, from: Data(legacy.utf8))
+        expect(decoded?.first?.isPinned == false, "고정 필드가 없는 예전 기록 파일도 읽힘")
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: directory)
     }

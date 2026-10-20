@@ -61,6 +61,14 @@ struct HistoryView: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if let title = sectionTitle(at: index, in: items) {
+                            Text(title)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8)
+                                .padding(.top, index == 0 ? 2 : 8)
+                        }
                         ClipRow(item: item, model: model,
                                 shortcut: index < 9 ? index + 1 : nil,
                                 isSelected: item.id == selectedID)
@@ -69,6 +77,7 @@ struct HistoryView: View {
                             .onTapGesture { model.copy(item) }
                             .contextMenu {
                                 Button("복사") { model.copy(item) }
+                                Button(item.isPinned ? "고정 해제" : "고정") { model.togglePin(item) }
                                 Button("삭제", role: .destructive) { model.delete(item) }
                             }
                     }
@@ -79,6 +88,13 @@ struct HistoryView: View {
                 if let target { proxy.scrollTo(target) }
             }
         }
+    }
+
+    /// 고정 항목이 있을 때만 "고정됨" / "최근" 구역 제목을 붙인다
+    private func sectionTitle(at index: Int, in items: [ClipItem]) -> String? {
+        guard items.first?.isPinned == true else { return nil }
+        if index == 0 { return "고정됨" }
+        return !items[index].isPinned && items[index - 1].isPinned ? "최근" : nil
     }
 
     private var emptyState: some View {
@@ -95,7 +111,7 @@ struct HistoryView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             if confirmingClear {
-                Text("기록을 모두 지울까요?")
+                Text("고정 안 한 기록을 모두 지울까요?")
                 Spacer()
                 Button("취소") { confirmingClear = false }
                 Button("모두 지우기") {
@@ -104,11 +120,11 @@ struct HistoryView: View {
                 }
                 .foregroundStyle(.red)
             } else {
-                Text("\(history.items.count)개 · ⏎ 복사 · ⌘⌫ 삭제")
+                Text("\(history.items.count)개 · ⏎ 복사 · ⌘P 고정 · ⌘⌫ 삭제")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("모두 지우기") { confirmingClear = true }
-                    .disabled(history.items.isEmpty)
+                    .disabled(!history.items.contains { !$0.isPinned })
                 settingsMenu
             }
         }
@@ -157,6 +173,12 @@ struct ClipRow: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            }
+            if item.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10))
+                    .rotationEffect(.degrees(45))
+                    .foregroundStyle(.secondary)
             }
             if let shortcut {
                 Text("⌘\(shortcut)")

@@ -25,13 +25,16 @@ final class PanelModel: ObservableObject {
         self.history = history
     }
 
+    /// 고정 항목(고정한 순서) 다음에 나머지(최근 순)
     var visibleItems: [ClipItem] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return history.items }
-        return history.items.filter {
+        let matches = query.isEmpty ? history.items : history.items.filter {
             $0.text.localizedCaseInsensitiveContains(query)
                 || ($0.appName?.localizedCaseInsensitiveContains(query) ?? false)
         }
+        let pinned = matches.filter(\.isPinned)
+            .sorted { ($0.pinnedAt ?? .distantPast) < ($1.pinnedAt ?? .distantPast) }
+        return pinned + matches.filter { !$0.isPinned }
     }
 
     var selectedItem: ClipItem? {
@@ -45,7 +48,7 @@ final class PanelModel: ObservableObject {
 
     func prepareForDisplay() {
         query = ""
-        selectedID = history.items.first?.id
+        selectedID = visibleItems.first?.id
         scrollTarget = selectedID
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -97,8 +100,19 @@ final class PanelModel: ObservableObject {
         if let item = selectedItem { delete(item) }
     }
 
+    func togglePin(_ item: ClipItem) {
+        history.setPinned(!item.isPinned, for: item)
+        selectedID = item.id
+        scrollTarget = item.id
+    }
+
+    func togglePinSelected() {
+        if let item = selectedItem { togglePin(item) }
+    }
+
+    /// 고정하지 않은 기록만 지운다
     func clearAll() {
-        history.removeAll()
+        history.removeUnpinned()
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {

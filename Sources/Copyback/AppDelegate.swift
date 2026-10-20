@@ -128,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         case kVK_Delete where modifiers == .command:
             model.deleteSelected()
+        case kVK_ANSI_P where modifiers == .command:
+            model.togglePinSelected()
         default:
             // ⌘1~⌘9: 목록의 n번째 항목 복사
             guard modifiers == .command,

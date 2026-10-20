@@ -99,15 +99,21 @@ struct HistoryStorage {
         }
     }
 
-    /// 목록에 없는 파일, 깨진 목록 백업까지 포함해 기록 데이터를 전부 지운다
-    func deleteAll() {
-        try? FileManager.default.removeItem(at: blobsDirectory)
-        try? FileManager.default.removeItem(at: thumbsDirectory)
+    /// keeping에 든 항목의 파일만 남기고 데이터 파일을 전부 지운다 (목록에 없는 파일, 깨진 목록 백업 포함).
+    /// 목록(history.json)은 호출하는 쪽에서 저장한다.
+    func deleteAll(keeping ids: Set<UUID>) {
+        for dir in [blobsDirectory, thumbsDirectory] {
+            let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            for file in files {
+                if let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent), ids.contains(id) {
+                    continue
+                }
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         for file in files where file.lastPathComponent.hasPrefix(Self.corruptBackupPrefix) {
             try? FileManager.default.removeItem(at: file)
         }
-        createDirectories()
-        saveIndex([])
     }
 }

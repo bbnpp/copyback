@@ -11,6 +11,7 @@ Free, local-only, no network access, no dependencies.
 - Search, keyboard navigation (`↑`/`↓`, `⏎`, `⌘1`–`⌘9`), delete with `⌘⌫`
 - Restores the original formats: rich text (RTF/HTML), images, files copied in Finder
 - Keeps up to 300 items; copying the same thing again moves it to the top
+- Pin frequently used items (`⌘P` or right-click): pinned items stay at the top in the order you pinned them, don't count toward the 300-item limit, and are kept when you clear the history
 - Skips content that password managers mark as concealed/transient ([nspasteboard.org](http://nspasteboard.org) convention)
 - Also skips copies made while Passwords or Keychain Access is the frontmost app (best effort: the clipboard is checked every 0.5 s, so switching apps right after copying can slip through)
 
@@ -49,7 +50,7 @@ History is stored **unencrypted** in `~/Library/Application Support/Copyback/` (
 - `thumbs/`: image previews
 
 Passwords copied from places that don't mark them (Terminal, text files, some apps) will be recorded.
-Delete them with `⌘⌫`, or use "모두 지우기" (Clear All), which wipes all stored data.
+Delete them with `⌘⌫`, or use "모두 지우기" (Clear All), which wipes all stored data except pinned items.
 Copies larger than 32 MB are not recorded.
 
 To remove everything: `make uninstall && rm -rf ~/Library/Application\ Support/Copyback`
